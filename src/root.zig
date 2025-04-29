@@ -59,37 +59,56 @@ test "ParsePipe memory operations" {
     }
 }
 
-// pub const Source = fn() ?u8;
-//
-// pub const ParseError = error {
-// };
-//
-// const Status = enum {
-//     init,
-// };
-//
-// pub const Parser = struct {
-//     allocator: std.mem.Allocator,
-//
-//     pub fn init(allocator: std.mem.Allocator) Parser {
-//         return .{
-//             .allocator = allocator,
-//         };
-//     }
-//     pub fn parse(self: Parser, source: Source) !?TomplNode {
-//         var status = Status.init;
-//         var node = TomplNode {
-//             .null_value = null,
-//         };
-//         while (source()) | c | {
-//             switch (status) {
-//             }
-//         }
-//         return node;
-//     }
-// };
-//
-// test "parse text" {
-//     const input = "\"Hello, World!\"";
-//     _ = input;
-// }
+pub const TokenType = enum {
+    comment,
+    assign,
+    table_head,
+    table_key,
+    table_value,
+};
+
+pub const Token = union {
+    comment: []const u8,
+    assign: void,
+    table_head: []const u8,
+    table_key: []const u8,
+    table_value: []const u8,
+};
+
+pub const TokenizerStatus = enum {
+    base,
+    text_read,
+    text_escape_read,
+};
+
+pub const TokenSource = fn() ?u8;
+pub const Tokenizer = struct {
+    allocator: std.mem.Allocator,
+    status: TokenizerStatus,
+    reader: fn() ?u8,
+
+    pub fn init(allocator: std.mem.Allocator, source: TokenSource) Tokenizer {
+        return .{
+            .allocator = allocator,
+            .status = TokenizerStatus.base,
+            .source = source,
+        };
+    }
+
+    pub fn next(self: Tokenizer) !?Token {
+            return switch (self.status) {
+                .base => self.baseNext(),
+                .text_read, .text_escape_read => textNext(),
+            };
+    }
+
+    fn baseNext() !?Token {
+        // TODO
+        return null;
+    }
+
+    fn textNext() !?Token {
+        // TODO
+        return null;
+    }
+};

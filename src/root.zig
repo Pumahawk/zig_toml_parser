@@ -6,7 +6,6 @@ pub const ParseNode = struct {
     value: TomplNode,
 };
 
-
 pub const TomplNodeType = enum {
     null_v,
 };
@@ -46,7 +45,7 @@ pub const ParsePipe = struct {
 };
 
 test "ParsePipe memory operations" {
-    const node = TomplNode {
+    const node = TomplNode{
         .null_v = {},
     };
 
@@ -81,11 +80,12 @@ pub const TokenizerStatus = enum {
     text_escape_read,
 };
 
-pub const TokenSource = fn() ?u8;
+pub const TokenSource = fn () ?u8;
+
 pub const Tokenizer = struct {
     allocator: std.mem.Allocator,
     status: TokenizerStatus,
-    reader: fn() ?u8,
+    reader: fn () ?u8,
 
     pub fn init(allocator: std.mem.Allocator, source: TokenSource) Tokenizer {
         return .{
@@ -96,10 +96,10 @@ pub const Tokenizer = struct {
     }
 
     pub fn next(self: Tokenizer) !?Token {
-            return switch (self.status) {
-                .base => self.baseNext(),
-                .text_read, .text_escape_read => textNext(),
-            };
+        return switch (self.status) {
+            .base => self.baseNext(),
+            .text_read, .text_escape_read => textNext(),
+        };
     }
 
     fn baseNext() !?Token {

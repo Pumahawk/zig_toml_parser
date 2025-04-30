@@ -1,5 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
+const print = std.debug.print;
 
 pub const ParseNode = struct {
     next: ?*ParseNode,
@@ -80,14 +81,26 @@ pub const TokenizerStatus = enum {
     text_escape_read,
 };
 
-pub const TokenSource = fn () ?u8;
+pub const Reader = struct {
+    ptr: *anyopaque,
+    nextFn: *const fn (ctx: *anyopaque) ?u8,
+
+    pub fn next(self: *Reader) ?u8 {
+        return self.nextFn(self.ptr);
+    }
+};
+
+pub const TokenError = error {
+    invalid_status,
+    limited_buffer_size,
+};
 
 pub const Tokenizer = struct {
     allocator: std.mem.Allocator,
     status: TokenizerStatus,
-    reader: fn () ?u8,
+    source: Reader,
 
-    pub fn init(allocator: std.mem.Allocator, source: TokenSource) Tokenizer {
+    pub fn init(allocator: std.mem.Allocator, source: Reader) Tokenizer {
         return .{
             .allocator = allocator,
             .status = TokenizerStatus.base,
@@ -95,20 +108,75 @@ pub const Tokenizer = struct {
         };
     }
 
-    pub fn next(self: Tokenizer) !?Token {
+    pub fn next(self: *Tokenizer) TokenError!?Token {
         return switch (self.status) {
             .base => self.baseNext(),
-            .text_read, .text_escape_read => textNext(),
+            else => TokenError.invalid_status,
         };
     }
 
-    fn baseNext() !?Token {
-        // TODO
-        return null;
+    pub fn baseNext(self: *Tokenizer) TokenError!?Token {
+        return while(self.source.next()) |char| {
+            return if ((char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z'))
+                    self.nextKey(char)
+                else TokenError.invalid_status;
+        } else null;
     }
 
-    fn textNext() !?Token {
-        // TODO
-        return null;
+    pub fn nextKey(self: *Tokenizer, init_char: u8) TokenError!?Token {
+        const n = comptime 100;
+        var buf: [n]u8 = undefined;
+        var i: u32 = 0;
+        buf[i] = init_char;
+        i += 1;
+        return while(self.source.next()) |char| {
+            if ((char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or char == '.') {
+                if (i < n) {
+                    buf[i] = char;
+                    i += 1;
+                } else {
+                    break TokenError.limited_buffer_size;
+                }
+            }
+        } else TokenError.invalid_status;
     }
 };
+
+test "tokenizer" {
+    const input = "testo.ops";
+    var strs = StringSource{
+        .i = 0, 
+        .str = input
+    };
+    var tokenizer = Tokenizer.init(std.testing.allocator, strs.reader());
+
+    _ = tokenizer.next() catch |err| {
+        print("err: {}\n", .{err});
+        unreachable;
+    };
+}
+
+const StringSource = struct {
+    i: usize,
+    str: []const u8,
+
+    fn reader(self: *StringSource) Reader {
+        return Reader{
+            .ptr = self,
+            .nextFn = next,
+        };
+    }
+
+    fn next(ptr: *anyopaque) ?u8 {
+        var self: *StringSource = @ptrCast(@alignCast(ptr));
+        if (self.i < self.str.len) {
+            const c = self.str[self.i];
+            self.i += 1;
+            return c;
+        } else {
+            return null;
+        }
+    }
+};
+
+

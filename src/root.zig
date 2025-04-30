@@ -67,7 +67,7 @@ pub const TokenType = enum {
     table_value,
 };
 
-pub const Token = union {
+pub const Token = union(TokenType) {
     comment: []const u8,
     assign: void,
     table_head: []const u8,
@@ -90,7 +90,8 @@ pub const Reader = struct {
     }
 };
 
-pub const TokenError = error {
+pub const TokenError = error{
+    OutOfMemory,
     invalid_status,
     limited_buffer_size,
 };
@@ -116,10 +117,11 @@ pub const Tokenizer = struct {
     }
 
     pub fn baseNext(self: *Tokenizer) TokenError!?Token {
-        return while(self.source.next()) |char| {
+        return while (self.source.next()) |char| {
             return if ((char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z'))
-                    self.nextKey(char)
-                else TokenError.invalid_status;
+                self.nextKey(char)
+            else
+                TokenError.invalid_status;
         } else null;
     }
 
@@ -129,7 +131,7 @@ pub const Tokenizer = struct {
         var i: u32 = 0;
         buf[i] = init_char;
         i += 1;
-        return while(self.source.next()) |char| {
+        return while (self.source.next()) |char| {
             if ((char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or char == '.') {
                 if (i < n) {
                     buf[i] = char;
@@ -137,23 +139,31 @@ pub const Tokenizer = struct {
                 } else {
                     break TokenError.limited_buffer_size;
                 }
+            } else if (char == ' ') {
+                break Token{
+                    .table_key = try self.allocator.dupe(u8, buf[0..i]),
+                };
             }
         } else TokenError.invalid_status;
     }
 };
 
 test "tokenizer" {
-    const input = "testo.ops";
-    var strs = StringSource{
-        .i = 0, 
-        .str = input
-    };
+    const input = "testo.ops ";
+    var strs = StringSource{ .i = 0, .str = input };
     var tokenizer = Tokenizer.init(std.testing.allocator, strs.reader());
 
-    _ = tokenizer.next() catch |err| {
+    const tok = tokenizer.next() catch |err| {
         print("err: {}\n", .{err});
         unreachable;
     };
+    switch (tok.?) {
+        .table_key => |key| {
+            try expect(std.mem.eql(u8, key, "testo.ops"));
+            std.testing.allocator.free(key);
+        },
+        else => unreachable,
+    }
 }
 
 const StringSource = struct {
@@ -178,5 +188,3 @@ const StringSource = struct {
         }
     }
 };
-
-

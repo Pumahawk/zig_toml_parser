@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const buf_size: usize = 512;
+
 pub const Status = enum {
     s1,
     s2,
@@ -36,7 +38,7 @@ pub const KeyAtm = struct {
 
     allocator: std.mem.Allocator,
 
-    buf: [100]u8,
+    buf: [buf_size]u8,
     i: usize,
     quote: ?u8,
 
@@ -113,10 +115,10 @@ const StringAtm = struct {
 
     allocator: std.mem.Allocator,
 
-    buf: [100]u8,
+    buf: [buf_size]u8,
     i_buf: usize,
-    buff_slice: [1000]u8,
-    i_buff_slice: usize,
+    buf_slice: [buf_size]u8,
+    i_buf_slice: usize,
     buf_quote: [2]u8,
     i_buf_quote: usize,
 
@@ -125,8 +127,8 @@ const StringAtm = struct {
             .allocator = allocator,
             .buf = undefined,
             .i_buf = 0,
-            .buff_slice = undefined,
-            .i_buff_slice = 0,
+            .buf_slice = undefined,
+            .i_buf_slice = 0,
             .buf_quote = undefined,
             .i_buf_quote = 0,
         };

@@ -91,10 +91,13 @@ pub const Reader = struct {
 };
 
 pub const TokenError = error{
+    InvalidBufferAccess,
     OutOfMemory,
     invalid_status,
     limited_buffer_size,
 };
+
+pub const GivenToken = struct { ?u8, ?Token };
 
 pub const Tokenizer = struct {
     allocator: std.mem.Allocator,
@@ -118,51 +121,103 @@ pub const Tokenizer = struct {
 
     pub fn baseNext(self: *Tokenizer) TokenError!?Token {
         return while (self.source.next()) |char| {
-            return if ((char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z'))
-                self.nextKey(char)
-            else
-                TokenError.invalid_status;
+            return if (isQuoteChar(char) or isValidKeyChar(char)) {
+                return if (try self.nextKey(char)) |token_tuple| {
+                    _, const token = token_tuple;
+                    return token;
+                } else null;
+            } else {
+                return TokenError.invalid_status;
+            };
         } else null;
     }
 
-    pub fn nextKey(self: *Tokenizer, init_char: u8) TokenError!?Token {
-        const n = comptime 100;
-        var buf: [n]u8 = undefined;
-        var i: u32 = 0;
-        buf[i] = init_char;
-        i += 1;
-        return while (self.source.next()) |char| {
-            if ((char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or char == '.') {
-                if (i < n) {
-                    buf[i] = char;
-                    i += 1;
-                } else {
-                    break TokenError.limited_buffer_size;
-                }
-            } else if (char == ' ') {
-                break Token{
-                    .table_key = try self.allocator.dupe(u8, buf[0..i]),
-                };
+    pub fn nextKey(self: *Tokenizer, init_char: u8) TokenError!?GivenToken {
+        var buf: [100]u8 = undefined;
+        var i: usize = 0;
+        var chart_opt: ?u8 = init_char;
+        const statuses = enum {
+            text,
+            quoted_text,
+        };
+        var status = statuses.text;
+        var open_quote: ?u8 = null;
+        return while (chart_opt) |char| : (chart_opt = self.source.next()) {
+            switch (status) {
+                .text => {
+                    if (isValidKeyChar(char)) {
+                        try loadBuf(&buf, i, char);
+                        i += 1;
+                    } else if (isQuoteChar(char)) {
+                        try loadBuf(&buf, i, char);
+                        i += 1;
+                        open_quote = char;
+                        status = statuses.quoted_text;
+                    } else {
+                        break .{ char, Token{ .table_key = try self.allocator.dupe(u8, buf[0..i]) } };
+                    }
+                },
+                .quoted_text => {
+                    if (open_quote) |quote| {
+                        if (char == quote) {
+                            try loadBuf(&buf, i, char);
+                            i += 1;
+                            open_quote = null;
+                            status = statuses.text;
+                        } else {
+                            try loadBuf(&buf, i, char);
+                            i += 1;
+                        }
+                    } else {
+                        unreachable;
+                    }
+                },
             }
         } else TokenError.invalid_status;
     }
 };
 
-test "tokenizer" {
-    const input = "testo.ops ";
-    var strs = StringSource{ .i = 0, .str = input };
-    var tokenizer = Tokenizer.init(std.testing.allocator, strs.reader());
+fn isQuoteChar(char: u8) bool {
+    return char == '\'' or char == '"';
+}
+fn isValidKeyChar(char: u8) bool {
+    return (char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or (char >= '0' and char <= '9') or char == '.';
+}
 
-    const tok = tokenizer.next() catch |err| {
-        print("err: {}\n", .{err});
-        unreachable;
+fn loadBuf(buf: []u8, i: usize, char: u8) TokenError!void {
+    if (i < buf.len) {
+        buf[i] = char;
+    } else {
+        return TokenError.InvalidBufferAccess;
+    }
+}
+
+test "tokenizer" {
+    const input = [_]struct { []const u8, []const u8 }{
+        .{ "testo ", "testo" },
+        .{ "testo.ops ", "testo.ops" },
+        .{ "\"testo\".ops ", "\"testo\".ops" },
+        .{ "'testo'.ops ", "'testo'.ops" },
+        .{ "001 ", "001" },
     };
-    switch (tok.?) {
-        .table_key => |key| {
-            try expect(std.mem.eql(u8, key, "testo.ops"));
-            std.testing.allocator.free(key);
-        },
-        else => unreachable,
+    for (input) |v| {
+        const in, const ex = v;
+        print("Testing: {s}\n", .{in});
+        var strs = StringSource{ .i = 0, .str = in };
+        var tokenizer = Tokenizer.init(std.testing.allocator, strs.reader());
+
+        const tok = tokenizer.next() catch |err| {
+            print("err: {}\n", .{err});
+            unreachable;
+        };
+        switch (tok.?) {
+            .table_key => |key| {
+                print("Expect: [{s}], Value: [{s}]\n", .{ ex, key });
+                try expect(std.mem.eql(u8, key, ex));
+                std.testing.allocator.free(key);
+            },
+            else => unreachable,
+        }
     }
 }
 

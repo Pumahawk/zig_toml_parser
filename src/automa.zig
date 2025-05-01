@@ -5,6 +5,13 @@ pub const Status = enum {
     s2,
     s3,
     s4,
+    s5,
+    s6,
+    s7,
+    s8,
+    s9,
+    s10,
+    s11,
 };
 
 pub const TokenType = enum {
@@ -102,7 +109,72 @@ fn isValidKeyChar(char: u8) bool {
     return (char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or (char >= '0' and char <= '9') or char == '.';
 }
 
+const StringAtm = struct {
 
+    allocator: std.mem.Allocator,
+
+    buf: [100]u8,
+    i_buf: usize,
+    buff_slice: [1000]u8,
+    i_buff_slice: usize,
+    buf_quote: [2]u8,
+    i_buf_quote: usize,
+
+    pub fn init(allocator: std.mem.Allocator) StringAtm {
+        return .{
+            .allocator = allocator,
+            .buf = undefined,
+            .i_buf = 0,
+            .buff_slice = undefined,
+            .i_buff_slice = 0,
+            .buf_quote = undefined,
+            .i_buf_quote = 0,
+        };
+    }
+
+    pub fn move(self: *StringAtm, s: Status, c: u8) !AtmMove {
+        _ = self; // TODO remove
+        switch (s) {
+            .c3 => {
+                return switch (c) {
+                    ' ' => |cs| .{ cs, null },
+                    '"' => .{ .s4, null },
+                    else => null,
+                };
+            },
+            .c4 => {
+                return if (isValidStringChar(c)) {
+                    // TODO add to buffer
+                    return .{ .c6, null };
+                } else switch (c) {
+                    '"' => .{ .c7, null },
+                    else => null,
+                };
+            },
+            .c5 => {
+            },
+            .c6 => {
+            },
+            .c7 => {
+            },
+            .c8 => {
+            },
+            .c9 => {
+            },
+            .c10 => {
+            },
+            .c11 => {
+            },
+            else => {
+                return null;
+            },
+        }
+    }
+};
+pub fn isValidStringChar(c: u8) bool {
+    _ = c; // TODO remove
+    return false;
+}
 test "testing my automa" {
     const input = "property.\"value ops\".lol =";
     var atm = KeyAtm.init(std.testing.allocator);

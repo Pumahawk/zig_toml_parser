@@ -1,5 +1,4 @@
 const std = @import("std");
-const print = std.debug.print;
 
 pub const Status = enum {
     s1,
@@ -103,3 +102,28 @@ fn isValidKeyChar(char: u8) bool {
     return (char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or (char >= '0' and char <= '9') or char == '.';
 }
 
+
+test "testing my automa" {
+    const input = "property.\"value ops\".lol =";
+    var atm = KeyAtm.init(std.testing.allocator);
+    var tokens: ?[]Token = null;
+    var status = Status.s1;
+    for (input) |c| {
+        if (try atm.move(status, c)) |move| {
+            status, tokens = move;
+        } else unreachable;
+    }
+    if (tokens) |t| {
+        const key = switch(t[0]) {
+            .table_key => |key| key,
+            else => unreachable,
+        };
+        switch(t[1]) {
+            .assign => {},
+            else => unreachable,
+        }
+        try std.testing.expect(std.mem.eql(u8, "property.\"value ops\".lol", key));
+        std.testing.allocator.free(key);
+        std.testing.allocator.free(t);
+    } else unreachable;
+}

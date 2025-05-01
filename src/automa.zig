@@ -1,0 +1,105 @@
+const std = @import("std");
+const print = std.debug.print;
+
+pub const Status = enum {
+    s1,
+    s2,
+    s3,
+    s4,
+};
+
+pub const TokenType = enum {
+    comment,
+    assign,
+    table_head,
+    table_key,
+    table_value,
+};
+
+pub const Token = union(TokenType) {
+    comment: []const u8,
+    assign: void,
+    table_head: []const u8,
+    table_key: []const u8,
+    table_value: []const u8,
+};
+
+pub const AtmMove = ? struct { Status, ?[]Token};
+
+pub const KeyAtm = struct {
+
+    allocator: std.mem.Allocator,
+
+    buf: [100]u8,
+    i: usize,
+    quote: ?u8,
+
+    pub fn init(allocator: std.mem.Allocator) KeyAtm {
+        return .{
+            .allocator = allocator,
+            .buf = undefined,
+            .i = 0,
+            .quote = null,
+        };
+    }
+
+    pub fn move(self: *KeyAtm, s: Status, c: u8) !AtmMove {
+        switch (s) {
+            .s1 => {
+                if (c == ' ') {
+                    return . { Status.s1, null };
+                } else if (isValidKeyChar(c)) {
+                    try self.loadBuf(c);
+                    return . { Status.s1, null };
+                } else if (isValidKeyQuote(c)) {
+                    try self.loadBuf(c);
+                    self.quote = c;
+                    return . { Status.s2, null };
+                } else if (c == '=') {
+                    return . { Status.s3, try self.allocator.dupe(Token, &[_]Token {try self.popToken(), Token.assign })};
+                } else {
+                    return error.InvalidStatus;
+                }
+            },
+            .s2 => {
+                if (self.quote) |quote| {
+                    if (c == quote) {
+                        self.quote = null;
+                        try self.loadBuf(c);
+                        return . { Status.s1, null };
+                    } else {
+                        try self.loadBuf(c);
+                        return . { Status.s2, null };
+                    }
+                } else unreachable;
+            },
+            else => {
+                return null;
+            },
+        }
+    }
+
+    fn loadBuf(self: *KeyAtm, c: u8) !void {
+        if (self.i < self.buf.len) {
+            self.buf[self.i] = c;
+            self.i += 1;
+        } else {
+            return error.FullBuffer;
+        }
+    }
+
+    fn popToken(self: *KeyAtm) !Token {
+        const token = Token { .table_key = try self.allocator.dupe(u8, self.buf[0..self.i]) };
+        self.i = 0;
+        return token;
+    }
+};
+
+fn isValidKeyQuote(char: u8) bool {
+    return char == '\'' or char == '"';
+}
+
+fn isValidKeyChar(char: u8) bool {
+    return (char >= 'a' and char <= 'z') or (char >= 'A' and char <= 'Z') or (char >= '0' and char <= '9') or char == '.';
+}
+

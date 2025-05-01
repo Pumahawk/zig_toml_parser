@@ -1,6 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 const print = std.debug.print;
+const automa = @import("automa.zig");
 
 pub const ParseNode = struct {
     next: ?*ParseNode,
@@ -243,3 +244,28 @@ const StringSource = struct {
         }
     }
 };
+
+test "testing my automa" {
+    const input = "property.\"value ops\".lol =";
+    var atm = automa.KeyAtm.init(std.testing.allocator);
+    var tokens: ?[]automa.Token = null;
+    var status = automa.Status.s1;
+    for (input) |c| {
+        if (try atm.move(status, c)) |move| {
+            status, tokens = move;
+        } else unreachable;
+    }
+    if (tokens) |t| {
+        const key = switch(t[0]) {
+            .table_key => |key| key,
+            else => unreachable,
+        };
+        switch(t[1]) {
+            .assign => {},
+            else => unreachable,
+        }
+        try std.testing.expect(std.mem.eql(u8, "property.\"value ops\".lol", key));
+        std.testing.allocator.free(key);
+        std.testing.allocator.free(t);
+    } else unreachable;
+}

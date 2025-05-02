@@ -135,49 +135,79 @@ const StringAtm = struct {
     }
 
     pub fn move(self: *StringAtm, s: Status, c: u8) !AtmMove {
-        _ = self; // TODO remove
-        switch (s) {
-            .c3 => {
+        return switch (s) {
+            .s3 => {
                 return switch (c) {
-                    ' ' => |cs| .{ cs, null },
+                    ' ' => .{ s, null },
                     '"' => .{ .s4, null },
                     else => null,
                 };
             },
-            .c4 => {
+            .s4 => {
                 return if (isValidStringChar(c)) {
                     // TODO add to buffer
-                    return .{ .c6, null };
+                    return .{ .s6, null };
                 } else switch (c) {
-                    '"' => .{ .c7, null },
+                    '"' => .{ .s7, null },
                     else => null,
                 };
             },
-            .c5 => {
+            // .s5 => {
+            //     // TODO none, delete it
+            // },
+            .s6 => {
+                return if (isValidStringChar(c)) {
+                    // TODO add to buffer
+                    return .{ .s6, null };
+                } else switch (c) {
+                    '"' => .{ .s5, try self.allocator.dupe(Token, &[_]Token {try self.generateStringToken()}) },
+                    else => null,
+                };
             },
-            .c6 => {
+            .s7 => {
+                return switch (c) {
+                    '=' => .{ .s8, null },
+                    '\n', ' ' => .{ .s5, null },
+                    else => null,
+                };
             },
-            .c7 => {
+            .s8 => {
+                return switch (c) {
+                    '"' => .{ .s9, null },
+                    else => {
+                        // TODO load buf
+                        return .{ .s8, null };
+                    },
+                };
             },
-            .c8 => {
+            .s9 => {
+                return null;
             },
-            .c9 => {
+            .s10 => {
+                return null;
             },
-            .c10 => {
-            },
-            .c11 => {
+            .s11 => {
+                return null;
             },
             else => {
                 return null;
             },
-        }
+        };
+    }
+
+    pub fn generateStringToken(self: *StringAtm) !Token {
+        // TODO generate token
+        _ = self;
+        return Token{ .table_value = "Test" };
     }
 };
+
 pub fn isValidStringChar(c: u8) bool {
-    _ = c; // TODO remove
-    return false;
+    // return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '.';
+    return c != '\n' and c != '"'; 
 }
-test "testing my automa" {
+
+test "testing KeyAtm" {
     const input = "property.\"value ops\".lol =";
     var atm = KeyAtm.init(std.testing.allocator);
     var tokens: ?[]Token = null;
@@ -198,6 +228,25 @@ test "testing my automa" {
         }
         try std.testing.expect(std.mem.eql(u8, "property.\"value ops\".lol", key));
         std.testing.allocator.free(key);
+        std.testing.allocator.free(t);
+    } else unreachable;
+}
+
+test "testing StringAtm" {
+    // TODO Add check token testing
+    var satm = StringAtm.init(std.testing.allocator);
+    const input = "\"this is my simpl string value\"";
+    var status = Status.s3;
+    var tokens: ?[]Token = null; 
+    for (input) |c| {
+        if (try satm.move(status, c)) |result| {
+            status, const tokens_opt = result;
+            if (tokens_opt) |_| {
+                tokens = tokens_opt;
+            }
+        } else unreachable;
+    }
+    if (tokens) |t| {
         std.testing.allocator.free(t);
     } else unreachable;
 }

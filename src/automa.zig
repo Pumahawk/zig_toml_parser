@@ -94,16 +94,6 @@ pub const KeyAtm = struct {
     }
 };
 
-fn loadBuf(buf: []u8, i_pnt: *usize, c: u8) !void {
-    const i = i_pnt.*;
-    if (i < buf.len) {
-        buf[i] = c;
-        i_pnt.* = i + 1;
-    } else {
-        return error.FullBuffer;
-    }
-}
-
 fn isValidKeyQuote(char: u8) bool {
     return char == '\'' or char == '"';
 }
@@ -153,9 +143,6 @@ const StringAtm = struct {
                     else => null,
                 };
             },
-            // .s5 => {
-            //     // TODO none, delete it
-            // },
             .s6 => {
                 return if (isValidStringChar(c)) {
                     // TODO add to buffer
@@ -182,13 +169,29 @@ const StringAtm = struct {
                 };
             },
             .s9 => {
-                return null;
+                return switch (c) {
+                    '"' => .{ .c10, null },
+                    else => {
+                        // TODO load buf
+                        return .{ .c11, null },
+                    },
+                };
             },
             .s10 => {
-                return null;
+                return switch (c) {
+                    '"' => {
+                        // generate token
+                        const token = null;
+                        return { .c5, token };
+                    },
+                };
             },
             .s11 => {
-                return null;
+                return switch (c) {
+                    ' ' => .{ .c11, null },
+                    '"', '\r', '\n' => .{ .c5, null },
+                    else => null,
+                };
             },
             else => {
                 return null;
@@ -250,4 +253,14 @@ test "testing StringAtm" {
     if (tokens) |t| {
         std.testing.allocator.free(t);
     } else unreachable;
+}
+
+fn loadBuf(buf: []u8, i_pnt: *usize, c: u8) !void {
+    const i = i_pnt.*;
+    if (i < buf.len) {
+        buf[i] = c;
+        i_pnt.* = i + 1;
+    } else {
+        return error.FullBuffer;
+    }
 }

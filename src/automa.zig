@@ -57,10 +57,10 @@ pub const KeyAtm = struct {
                 if (c == ' ') {
                     return . { Status.s1, null };
                 } else if (isValidKeyChar(c)) {
-                    try self.loadBuf(c);
+                    try loadBuf(&self.buf, &self.i, c);
                     return . { Status.s1, null };
                 } else if (isValidKeyQuote(c)) {
-                    try self.loadBuf(c);
+                    try loadBuf(&self.buf, &self.i, c);
                     self.quote = c;
                     return . { Status.s2, null };
                 } else if (c == '=') {
@@ -73,10 +73,10 @@ pub const KeyAtm = struct {
                 if (self.quote) |quote| {
                     if (c == quote) {
                         self.quote = null;
-                        try self.loadBuf(c);
+                        try loadBuf(&self.buf, &self.i, c);
                         return . { Status.s1, null };
                     } else {
-                        try self.loadBuf(c);
+                        try loadBuf(&self.buf, &self.i, c);
                         return . { Status.s2, null };
                     }
                 } else unreachable;
@@ -87,21 +87,22 @@ pub const KeyAtm = struct {
         }
     }
 
-    fn loadBuf(self: *KeyAtm, c: u8) !void {
-        if (self.i < self.buf.len) {
-            self.buf[self.i] = c;
-            self.i += 1;
-        } else {
-            return error.FullBuffer;
-        }
-    }
-
     fn popToken(self: *KeyAtm) !Token {
         const token = Token { .table_key = try self.allocator.dupe(u8, self.buf[0..self.i]) };
         self.i = 0;
         return token;
     }
 };
+
+fn loadBuf(buf: []u8, i_pnt: *usize, c: u8) !void {
+    const i = i_pnt.*;
+    if (i < buf.len) {
+        buf[i] = c;
+        i_pnt.* = i + 1;
+    } else {
+        return error.FullBuffer;
+    }
+}
 
 fn isValidKeyQuote(char: u8) bool {
     return char == '\'' or char == '"';

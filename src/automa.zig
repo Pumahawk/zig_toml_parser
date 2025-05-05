@@ -2,6 +2,16 @@ const std = @import("std");
 
 const buf_size: usize = 512;
 
+pub fn BufU8(bs: usize) type {
+    return Buf(u8, bs);
+}
+
+const BufFU8 = Buf(u8, buf_size);
+
+pub fn BufSU8(bss: usize, bs: usize) type {
+    return BufS(u8, bss, bs);
+}
+
 pub const Status = enum {
     s1,
     s2,
@@ -32,21 +42,18 @@ pub const Token = union(TokenType) {
     table_value: []const u8,
 };
 
-pub const AtmMove = ? struct { Status, ?[]Token};
+pub const AtmMove = ?struct { Status, ?[]Token };
 
 pub const KeyAtm = struct {
-
     allocator: std.mem.Allocator,
 
-    buf: [buf_size]u8,
-    i: usize,
+    buf: BufFU8,
     quote: ?u8,
 
     pub fn init(allocator: std.mem.Allocator) KeyAtm {
         return .{
             .allocator = allocator,
-            .buf = undefined,
-            .i = 0,
+            .buf = BufFU8.init(),
             .quote = null,
         };
     }
@@ -55,16 +62,16 @@ pub const KeyAtm = struct {
         switch (s) {
             .s1 => {
                 if (c == ' ') {
-                    return . { Status.s1, null };
+                    return .{ Status.s1, null };
                 } else if (isValidKeyChar(c)) {
-                    try loadBuf(&self.buf, &self.i, c);
-                    return . { Status.s1, null };
+                    try self.buf.load(c);
+                    return .{ Status.s1, null };
                 } else if (isValidKeyQuote(c)) {
-                    try loadBuf(&self.buf, &self.i, c);
+                    try self.buf.load(c);
                     self.quote = c;
-                    return . { Status.s2, null };
+                    return .{ Status.s2, null };
                 } else if (c == '=') {
-                    return . { Status.s3, try self.allocator.dupe(Token, &[_]Token {try self.popToken(), Token.assign })};
+                    return .{ Status.s3, try self.allocator.dupe(Token, &[_]Token{ try self.popToken(), Token.assign }) };
                 } else {
                     return error.InvalidStatus;
                 }
@@ -73,11 +80,11 @@ pub const KeyAtm = struct {
                 if (self.quote) |quote| {
                     if (c == quote) {
                         self.quote = null;
-                        try loadBuf(&self.buf, &self.i, c);
-                        return . { Status.s1, null };
+                        try self.buf.load(c);
+                        return .{ Status.s1, null };
                     } else {
-                        try loadBuf(&self.buf, &self.i, c);
-                        return . { Status.s2, null };
+                        try self.buf.load(c);
+                        return .{ Status.s2, null };
                     }
                 } else unreachable;
             },
@@ -88,8 +95,8 @@ pub const KeyAtm = struct {
     }
 
     fn popToken(self: *KeyAtm) !Token {
-        const token = Token { .table_key = try self.allocator.dupe(u8, self.buf[0..self.i]) };
-        self.i = 0;
+        const token = Token{ .table_key = try self.allocator.dupe(u8, self.buf.slice()) };
+        self.buf.reset();
         return token;
     }
 };
@@ -103,25 +110,16 @@ fn isValidKeyChar(char: u8) bool {
 }
 
 const StringAtm = struct {
-
     allocator: std.mem.Allocator,
 
-    buf: [buf_size]u8,
-    i_buf: usize,
-    buf_slice: [buf_size]u8,
-    i_buf_slice: usize,
-    buf_quote: [2]u8,
-    i_buf_quote: usize,
+    buf_slice: BufSU8(100, 1024),
+    buf_quote: BufU8(2),
 
     pub fn init(allocator: std.mem.Allocator) StringAtm {
         return .{
             .allocator = allocator,
-            .buf = undefined,
-            .i_buf = 0,
-            .buf_slice = undefined,
-            .i_buf_slice = 0,
-            .buf_quote = undefined,
-            .i_buf_quote = 0,
+            .buf_slice = BufSU8(100, 1024).init(allocator),
+            .buf_quote = BufU8(2).init(),
         };
     }
 
@@ -136,7 +134,7 @@ const StringAtm = struct {
             },
             .s4 => {
                 return if (isValidStringChar(c)) {
-                    // TODO add to buffer
+                    try self.buf_slice.load(c);
                     return .{ .s6, null };
                 } else switch (c) {
                     '"' => .{ .s7, null },
@@ -148,7 +146,7 @@ const StringAtm = struct {
                     // TODO add to buffer
                     return .{ .s6, null };
                 } else switch (c) {
-                    '"' => .{ .s5, try self.allocator.dupe(Token, &[_]Token {try self.generateStringToken()}) },
+                    '"' => .{ .s5, try self.allocator.dupe(Token, &[_]Token{try self.generateStringToken()}) },
                     else => null,
                 };
             },
@@ -170,10 +168,10 @@ const StringAtm = struct {
             },
             .s9 => {
                 return switch (c) {
-                    '"' => .{ .c10, null },
+                    '"' => .{ .s10, null },
                     else => {
                         // TODO load buf
-                        return .{ .c11, null },
+                        return .{ .s11, null };
                     },
                 };
             },
@@ -181,15 +179,17 @@ const StringAtm = struct {
                 return switch (c) {
                     '"' => {
                         // generate token
-                        const token = null;
-                        return { .c5, token };
+                        // const token = Token{.table_value = };
+                        // return .{ .s5, [_]Token { token } };
+                        return .{ .s5, null };
                     },
+                    else => return null,
                 };
             },
             .s11 => {
                 return switch (c) {
-                    ' ' => .{ .c11, null },
-                    '"', '\r', '\n' => .{ .c5, null },
+                    ' ' => .{ .s11, null },
+                    '"', '\r', '\n' => .{ .s5, null },
                     else => null,
                 };
             },
@@ -208,7 +208,7 @@ const StringAtm = struct {
 
 pub fn isValidStringChar(c: u8) bool {
     // return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '.';
-    return c != '\n' and c != '"'; 
+    return c != '\n' and c != '"';
 }
 
 test "testing KeyAtm" {
@@ -222,11 +222,11 @@ test "testing KeyAtm" {
         } else unreachable;
     }
     if (tokens) |t| {
-        const key = switch(t[0]) {
+        const key = switch (t[0]) {
             .table_key => |key| key,
             else => unreachable,
         };
-        switch(t[1]) {
+        switch (t[1]) {
             .assign => {},
             else => unreachable,
         }
@@ -241,7 +241,7 @@ test "testing StringAtm" {
     var satm = StringAtm.init(std.testing.allocator);
     const input = "\"this is my simpl string value\"";
     var status = Status.s3;
-    var tokens: ?[]Token = null; 
+    var tokens: ?[]Token = null;
     for (input) |c| {
         if (try satm.move(status, c)) |result| {
             status, const tokens_opt = result;
@@ -255,7 +255,7 @@ test "testing StringAtm" {
     } else unreachable;
 }
 
-fn loadBuf(buf: []u8, i_pnt: *usize, c: u8) !void {
+fn loadBufM(buf: []u8, i_pnt: *usize, c: u8) !void {
     const i = i_pnt.*;
     if (i < buf.len) {
         buf[i] = c;
@@ -263,4 +263,67 @@ fn loadBuf(buf: []u8, i_pnt: *usize, c: u8) !void {
     } else {
         return error.FullBuffer;
     }
+}
+
+pub fn Buf(T: type, size: usize) type {
+    return struct {
+        const Self = @This();
+        i: usize,
+        buf: [size]T,
+
+        pub fn init() Buf(T, size) {
+            return .{
+                .i = 0,
+                .buf = undefined,
+            };
+        }
+
+        pub fn reset(self: *Self) void {
+            self.i = 0;
+        }
+
+        pub fn load(self: *Self, c: T) !void {
+            if (self.i < self.buf.len) {
+                self.buf[self.i] = c;
+                self.i += 1;
+            } else {
+                return error.FullBuffer;
+            }
+        }
+
+        pub fn slice(self: *Self) []T {
+            return self.buf[0..self.i];
+        }
+    };
+}
+
+pub fn BufS(T: type, size_s: usize, size_b: usize) type {
+    return struct {
+        const Self = @This();
+
+        allocator: std.mem.Allocator,
+
+        buf: Buf(T, size_b),
+        buf_s: Buf([]T, size_s),
+
+        pub fn init(allocator: std.mem.Allocator) BufS(T, size_s, size_b) {
+            return .{
+                .allocator = allocator,
+                .buf = Buf(T, size_b).init(),
+                .buf_s = Buf([]T, size_s).init(),
+            };
+        }
+
+        pub fn load(self: *Self, v: T) !void {
+            self.buf.load(v) catch |err| {
+                switch (err) {
+                    error.FullBuffer => {
+                        const buf_tmp = try self.allocator.dupe(T, self.buf.slice());
+                        self.buf.reset();
+                        try self.buf_s.load(buf_tmp);
+                    },
+                }
+            };
+        }
+    };
 }

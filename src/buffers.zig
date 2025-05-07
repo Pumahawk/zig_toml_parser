@@ -1,4 +1,5 @@
 const std = @import("std");
+const expect = std.testing.expect;
 
 pub fn Buf(T: type, size: usize) type {
     return struct {
@@ -60,5 +61,54 @@ pub fn BufS(T: type, size_s: usize, size_b: usize) type {
                 }
             };
         }
+
+        fn deinitBuffSlice(self: *Self) void {
+            const s = self.buf_s.slice();
+            for (s) |arr| {
+                self.allocator.free(arr);
+            }
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.deinitBuffSlice();
+        }
+
+        pub fn reset(self: *Self) void {
+            self.deinitBuffSlice();
+            self.buf_s.reset();
+            self.buf.reset();
+        }
     };
+}
+
+test "Buf init, reset and load" {
+    const Bufi32 = Buf(i32, 2);
+    var bf = Bufi32.init();
+    try bf.load(1);
+    try bf.load(2);
+
+    const s1 = bf.slice();
+
+    try expect(s1.len == 2);
+    try expect(s1[0] == 1);
+    try expect(s1[1] == 2);
+
+    bf.reset();
+
+    try bf.load(3);
+
+    const s2 = bf.slice();
+
+    try expect(s2.len == 1);
+    try expect(s2[0] == 3);
+}
+
+test "Bufs init, reset and load" {
+    const Bufsu8 = BufS(u8, 2, 2);
+    var bf = Bufsu8.init(std.testing.allocator);
+    const s1 = "abcd";
+    for (s1) |c| {
+        try bf.load(c);
+    }
+    bf.deinit();
 }

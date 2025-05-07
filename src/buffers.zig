@@ -56,6 +56,7 @@ pub fn BufS(T: type, size_s: usize, size_b: usize) type {
                     error.FullBuffer => {
                         const buf_tmp = try self.allocator.dupe(T, self.buf.slice());
                         self.buf.reset();
+                        try self.buf.load(v);
                         try self.buf_s.load(buf_tmp);
                     },
                 }
@@ -77,6 +78,23 @@ pub fn BufS(T: type, size_s: usize, size_b: usize) type {
             self.deinitBuffSlice();
             self.buf_s.reset();
             self.buf.reset();
+        }
+
+        pub fn allocSlice(self: *Self) ![]T {
+            const size_total = self.buf.slice().len + size_b * self.buf_s.slice().len;
+            var slice = try self.allocator.alloc(T, size_total);
+            var i: usize = 0;
+            for (self.buf_s.slice()) |arr| {
+                for (arr) |c| {
+                    slice[i] = c;
+                    i += 1;
+                }
+            }
+            for (self.buf.slice()) |c| {
+                slice[i] = c;
+                i += 1;
+            }
+            return slice;
         }
     };
 }
@@ -104,11 +122,14 @@ test "Buf init, reset and load" {
 }
 
 test "Bufs init, reset and load" {
-    const Bufsu8 = BufS(u8, 2, 2);
+    const Bufsu8 = BufS(u8, 1, 2);
     var bf = Bufsu8.init(std.testing.allocator);
     const s1 = "abcd";
     for (s1) |c| {
         try bf.load(c);
     }
+    const value = try bf.allocSlice();
+    try std.testing.expectEqualDeep("abcd", value);
     bf.deinit();
+    std.testing.allocator.free(value);
 }

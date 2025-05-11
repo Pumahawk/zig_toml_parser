@@ -1,33 +1,35 @@
 const std = @import("std");
 const testing = std.testing;
 const buf = @import("../buffers.zig");
-const atm = @import("./automa.zig");
 
-pub const NumFixLenAtmRet = ?struct { atm.Status, ?[]const u8 };
+const Status = enum {
+    s1,
+    s2,
+    s3,
+};
 
-pub const NumFixLenAtmStart = []atm.Status;
-pub const NumFixLenAtmEnd = atm.Status;
-pub const NumFixLenAtmMid = atm.Status;
+pub const Ret = ?struct { Status, ?[]const u8 };
+
+pub const Start = []Status;
+pub const End = Status;
 
 pub fn NumFixLenAtm(size: usize) type {
     return struct {
         const Self = @This();
 
-        state_start: []atm.Status,
-        state_mid: atm.Status,
-        state_end: atm.Status,
+        state_start: []Status,
 
         count_i: usize,
         buf: buf.Buf(u8, size),
 
-        pub fn move(self: *Self, s: atm.Status, c: u8) !NumFixLenAtmRet {
+        pub fn move(self: *Self, s: Status, c: u8) !Ret {
             return if (self.count_i > 0) {
                 return if (c >= '0' and c <= '9') {
                     try self.load(c);
                     return if (self.count_i < size) {
-                        return .{ self.state_mid, null };
+                        return .{ Status.s2, null };
                     } else {
-                        const ret = .{ self.state_end, self.buf.slice() };
+                        const ret = .{ Status.s3, self.buf.slice() };
                         defer self.reset();
                         return ret;
                     };
@@ -37,7 +39,7 @@ pub fn NumFixLenAtm(size: usize) type {
                     if (s == state) {
                         if (c >= '0' and c <= '9') {
                                 try self.load(c);
-                                return .{ self.state_mid, null };
+                                return .{ Status.s2, null };
                         }
                     }
                 } else null;
@@ -54,11 +56,13 @@ pub fn NumFixLenAtm(size: usize) type {
             try self.buf.load(c);
         }
 
-        pub fn init(start: NumFixLenAtmStart, mid: NumFixLenAtmMid, end: NumFixLenAtmEnd) Self {
+        pub fn init() Self {
+            return initFromStatus();
+        }
+
+        pub fn initFromStatus(start: Start) Self {
             return .{
                 .state_start = start,
-                .state_end = end,
-                .state_mid = mid,
 
                 .count_i = 0,
                 .buf = buf.Buf(u8, size).init(),
@@ -68,13 +72,13 @@ pub fn NumFixLenAtm(size: usize) type {
 }
 
 test "NumFixLenAtm" {
-    const s1 = atm.Status.s1;
-    const s2 = atm.Status.s2;
-    const s3 = atm.Status.s3;
-    var startS = [_]atm.Status{s1};
-    var nfla = NumFixLenAtm(3).init(&startS, s2, s3);
+    const s1 = Status.s1;
+    const s2 = Status.s2;
+    const s3 = Status.s3;
+    var startS = [_]Status{s1};
+    var nfla = NumFixLenAtm(3).initFromStatus(&startS);
     const input = "123";
-    var snow = atm.Status.s1;
+    var snow = Status.s1;
     if (try nfla.move(s1, input[0])) |moved| {
         snow, const tok = moved;
         try testing.expectEqual(s2, snow);

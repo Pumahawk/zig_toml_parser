@@ -2,7 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const buf = @import("../buffers.zig");
 
-const Status = enum {
+pub const Status = enum {
     s1,
     s2,
     s3,
@@ -54,10 +54,6 @@ pub fn NumFixLenAtm(size: usize) type {
         fn load(self: *Self, c: u8) !void {
             self.count_i += 1;
             try self.buf.load(c);
-        }
-
-        pub fn init() Self {
-            return initFromStatus();
         }
 
         pub fn initFromStatus(start: Start) Self {

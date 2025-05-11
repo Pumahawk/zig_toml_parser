@@ -1,5 +1,5 @@
 const std = @import("std");
-const buffers = @import("buffers.zig");
+const buffers = @import("../buffers.zig");
 
 const buf_size: usize = 512;
 const BufFU8 = BufU8(buf_size);

@@ -30,7 +30,7 @@ pub fn NumFixLenAtm(size: usize) type {
                         return .{ Status.s2, null };
                     } else {
                         const ret = .{ Status.s3, self.buf.slice() };
-                        defer self.reset();
+                        self.reset();
                         return ret;
                     };
                 } else error.InvalidStatus;

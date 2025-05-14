@@ -38,8 +38,8 @@ pub fn NumFixLenAtm(size: usize) type {
                 return for (self.state_start) |state| {
                     if (s == state) {
                         if (c >= '0' and c <= '9') {
-                                try self.load(c);
-                                return .{ Status.s2, null };
+                            try self.load(c);
+                            return .{ Status.s2, null };
                         }
                     }
                 } else null;

@@ -31,11 +31,11 @@ pub const StringAtm = struct {
     l_uc_atm: LongUCode,
 
     pub fn move(self: *Self, s: Status, c: u8) !Ret {
-            return switch (s) {
-                .s2 => self.fromS2(c),
-                .s3 => self.fromS3(c),
-                .s4 => self.fromS4(c),
-            };
+        return switch (s) {
+            .s2 => self.fromS2(c),
+            .s3 => self.fromS3(c),
+            .s4 => self.fromS4(c),
+        };
     }
 
     pub fn reset(self: *Self) void {
@@ -55,7 +55,7 @@ pub const StringAtm = struct {
     pub fn fromS2(self: Self, c: u8) !Ret {
         return if (validStrC(c)) {
             try self.buf.load(c);
-            return .{.s2, null };
+            return .{ .s2, null };
         } else switch (c) { // Check if buf load needed
             '"' => .{ .s4, self.tokenize() },
             '\\' => .{ .s3, null },
